@@ -1,7 +1,12 @@
 package com.example.guhyatainterntask.ui.theme
+import android.content.Context
+import kotlinx.coroutines.delay
 import android.content.Intent
-import android.graphics.drawable.Drawable
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.provider.Settings
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,7 +22,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -25,6 +31,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -36,19 +43,19 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.guhyatainterntask.helper.hasUsageStatsPermission
 import com.example.guhyatainterntask.helper.isAppUnused
@@ -58,19 +65,22 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @JvmOverloads
 @Composable
 fun InstalledAppsScreen(
     viewModel: AppViewModel = viewModel(),
-    onAppClick: (AppInfo) -> Unit // pass clicked app
+    onAppClick: (AppInfo) -> Unit
 ) {
     val apps = viewModel.apps
+    val listState = rememberLazyListState()
     val context = LocalContext.current
     var selectedTab by remember { mutableStateOf("Unused apps") }
     var searchQuery by remember { mutableStateOf("") }
     var showDialog by remember { mutableStateOf(false) }
     var appToUninstall by remember { mutableStateOf<AppInfo?>(null) }
+    var showList by remember { mutableStateOf(false) }
+    var showLoading by remember { mutableStateOf(false) }
 
 
     // Ask for permission once
@@ -81,18 +91,30 @@ fun InstalledAppsScreen(
         }
     }
 
-    // Filtering logic for tabs and search
-    val filteredApps = apps.filter { app ->
-        val matchesTab = when (selectedTab) {
-            "Unused apps" -> isAppUnused(app.lastUsedTime)
-            else -> true
+    // Slight delay to allow Compose to settle before drawing large lists
+    LaunchedEffect(apps) {
+        showList = false
+        showLoading = true
+        delay(200)
+        showLoading = false
+        showList = true
+    }
+
+    // Filtered apps list with remember to prevent re-computation
+    val filteredApps by produceState(initialValue = emptyList<AppInfo>(), apps, selectedTab, searchQuery) {
+        delay(100) // debounce delay
+        value = apps.filter { app ->
+            val matchesTab = when (selectedTab) {
+                "Unused apps" -> isAppUnused(app.lastUsedTime)
+                else -> true
+            }
+            val matchesSearch = app.name.contains(searchQuery, ignoreCase = true)
+            matchesTab && matchesSearch
         }
-        val matchesSearch = app.name.contains(searchQuery, ignoreCase = true)
-        matchesTab && matchesSearch
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // Header
+        // Header and search
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -110,7 +132,6 @@ fun InstalledAppsScreen(
                     modifier = Modifier.align(Alignment.CenterHorizontally)
                 )
 
-                // Search bar
                 TextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
@@ -137,7 +158,6 @@ fun InstalledAppsScreen(
                         }
                     }
                 )
-
             }
         }
 
@@ -161,7 +181,10 @@ fun InstalledAppsScreen(
                             .weight(1f)
                             .clip(RoundedCornerShape(20.dp))
                             .background(if (selected) Color.White else Color(0xFFF0F0F0))
-                            .clickable { selectedTab = tab }
+                            .clickable {
+                                context.vibrate()
+                                selectedTab = tab
+                            }
                             .padding(vertical = 12.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -178,59 +201,128 @@ fun InstalledAppsScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         // App List
-        LazyColumn(
-            modifier = Modifier.padding(horizontal = 20.dp)
-        ) {
-            items(filteredApps) { app ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 9.dp)
-                        .clickable { onAppClick(app) } // navigate on click
-                ) {
-                    AppIcon(app.icon)
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(text = app.name, fontWeight = FontWeight.Bold)
-                        Text(text = formatLastUsedTime(app.lastUsedTime), color = Color.Gray)
-                    }
-                    Spacer(modifier = Modifier.weight(1f))
-
-                    if (isAppUnused(app.lastUsedTime)) {
-                        IconButton(onClick = {
-                            appToUninstall = app
-                            showDialog = true
-                        }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Uninstall")
-                        }
-                    }
-
-                 else {
-                        IconButton(onClick = {
-                            val launchIntent = context.packageManager.getLaunchIntentForPackage(app.packageName)
-                            launchIntent?.let { context.startActivity(it) }
-                        }) {
-                            Icon(Icons.Default.ExitToApp, contentDescription = "Open App")
-                        }
-                    }
-                }
+        if (showLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = 40.dp),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                CircularProgressIndicator()
             }
         }
+        else if (showList) {
+            if (filteredApps.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = 100.dp),
+                    contentAlignment = Alignment.TopCenter
+                ) {
+                    Text(
+                        text = "No apps match your search.",
+                        color = Color.Gray,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.padding(horizontal = 20.dp)
+                ) {
+                    itemsIndexed(
+                        filteredApps,
+                        key = { index, app -> "${app.packageName}-$index" }
+                    ) { _, app ->
+                        val formattedTime = formatLastUsedTime(app.lastUsedTime)
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 9.dp)
+                                .clickable { onAppClick(app) }
+                                .animateItemPlacement()
+                        ) {
+                            AppIcon(app.icon)
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column {
+                                Text(text = app.name, fontWeight = FontWeight.Bold)
+                                Text(text = formattedTime, color = Color.Gray)
+                            }
+
+                            Spacer(modifier = Modifier.weight(.5f))
+                            Text(
+                                text = "|",
+                                modifier = Modifier.padding(vertical = 15.dp),
+                                color = Color.Gray
+                            )
+                            Spacer(modifier = Modifier.weight(.3f))
+
+                            if (selectedTab == "Unused apps") {
+                                IconButton(onClick = {
+                                    appToUninstall = app
+                                    showDialog = true
+                                }) {
+                                    Icon(Icons.Default.Delete, contentDescription = "Uninstall")
+                                }
+                            } else {
+                                IconButton(onClick = {
+                                    val launchIntent =
+                                        context.packageManager.getLaunchIntentForPackage(app.packageName)
+                                    launchIntent?.let { context.startActivity(it) }
+                                }) {
+                                    Icon(Icons.Default.ExitToApp, contentDescription = "Open App")
+                                }
+                            }
+                        }
+                    }
+
+                    // Total Count Display
+                    item {
+                        val totalLabel = if (selectedTab == "Unused apps") {
+                            "Unused apps found: ${filteredApps.size}"
+                        } else {
+                            "Total installed apps: ${filteredApps.size}"
+                        }
+
+                        Text(
+                            text = totalLabel,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            textAlign = TextAlign.Center,
+                            color = Color.DarkGray,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    // Bottom Spacer
+                    item {
+                        Spacer(modifier = Modifier.height(40.dp))
+                    }
+                }
+
+            }
+        }
+
+        // Uninstall Suggestion Dialog
         if (showDialog && appToUninstall != null) {
             AlertDialog(
                 onDismissRequest = {
                     showDialog = false
                     appToUninstall = null
                 },
-                title = { Text("Confirm Uninstall") },
-                text = { Text("Are you sure you want to uninstall ${appToUninstall?.name}?") },
+                title = { Text("Uninstall Suggestion") },
+                text = { Text("You have not used this app for a long while so you can uninstall ${appToUninstall?.name}?") },
                 confirmButton = {
                     TextButton(onClick = {
                         viewModel.openAppInfo(context, appToUninstall!!.packageName)
                         showDialog = false
                         appToUninstall = null
                     }) {
-                        Text("Uninstall")
+                        Text("Go to AppInfo")
                     }
                 },
                 dismissButton = {
@@ -243,26 +335,41 @@ fun InstalledAppsScreen(
                 }
             )
         }
-
     }
 }
 
+//Used to print app icons
 @Composable
-fun AppIcon(drawable: Drawable) {
-    val bitmap = drawable.toBitmap()
+fun AppIcon(bitmap: ImageBitmap) {
     Image(
-        painter = BitmapPainter(bitmap.asImageBitmap()),
+        bitmap = bitmap,
         contentDescription = null,
         modifier = Modifier.size(48.dp)
     )
 }
+
+
+// customize date pattern
 @Composable
 fun formatLastUsedTime(timestamp: Long): String {
     return if (timestamp == 0L) {
-        "Not used"
+        "Not used for a long time"
     } else {
         val date = Date(timestamp)
         val formatter = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
         "Last used: ${formatter.format(date)}"
+    }
+}
+
+// Helps to make vibrate
+fun Context.vibrate(milliseconds: Long = 50) {
+    val vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        vibrator.vibrate(
+            VibrationEffect.createOneShot(milliseconds, VibrationEffect.DEFAULT_AMPLITUDE)
+        )
+    } else {
+        @Suppress("DEPRECATION")
+        vibrator.vibrate(milliseconds)
     }
 }
