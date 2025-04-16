@@ -7,14 +7,17 @@ import android.content.*
 import android.net.Uri
 import android.provider.Settings
 import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.*
 import com.example.guhyatainterntask.model.AppInfo
 import java.util.*
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
+    //To hold selected apps
     val selectedApp = mutableStateOf<AppInfo?>(null)
 
-
+//A helper function to update the selectedApp
     fun setSelectedApp(app: AppInfo) {
         selectedApp.value = app
     }
@@ -24,34 +27,43 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _apps = mutableStateListOf<AppInfo>()
     val apps: List<AppInfo> get() = _apps
 
+    //This block will be running as soon as this class is called
     init {
         loadInstalledApps()
     }
 
     private fun loadInstalledApps() {
+
         val context = getApplication<Application>().applicationContext
         val pm = context.packageManager
 
+        //gets app usage
         val usageStatsMap = getUsageStatsMap(context)
 
+        //It’s a filter to get only the apps shown in the launcher.
         val intent = Intent(Intent.ACTION_MAIN, null)
         intent.addCategory(Intent.CATEGORY_LAUNCHER)
 
+        //get apps which matchs intent
         val resolvedApps = pm.queryIntentActivities(intent, 0)
         _apps.clear()
 
+        //gets Apps name icon and version
         resolvedApps.forEach { info ->
             val appInfo = info.activityInfo
             val appName = pm.getApplicationLabel(appInfo.applicationInfo).toString()
-            val icon = pm.getApplicationIcon(appInfo.applicationInfo)
+            val drawable = pm.getApplicationIcon(appInfo.applicationInfo)
+            val icon = drawable.toBitmap().asImageBitmap()
             val version = try {
                 pm.getPackageInfo(appInfo.packageName, 0).versionName ?: "N/A"
             } catch (e: Exception) {
                 "Unknown"
             }
 
+            //gets last-usage
             val lastUsed = usageStatsMap[appInfo.packageName]?.lastTimeUsed ?: 0L
 
+            // adding to apps data to _apps list
             _apps.add(
                 AppInfo(
                     name = appName,
@@ -64,8 +76,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+// Function to fetches usage stats for all apps used in the last 30 days.
     private fun getUsageStatsMap(context: Context): Map<String, UsageStats> {
-        // Check if permission is granted
+        //to check if permission is granted
         val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
         val mode = appOps.checkOpNoThrow(
             AppOpsManager.OPSTR_GET_USAGE_STATS,
@@ -74,31 +87,34 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         )
 
         if (mode != AppOpsManager.MODE_ALLOWED) {
-            // Optional: open settings to request permission
+            // if not granted that to open settings to request permission
             val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
             context.startActivity(intent)
 
-            // Return empty or notify user
+            // Return empty or notify user , where by using this emptymap function the code will not crash
             return emptyMap()
         }
 
         val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val calendar = Calendar.getInstance()
-        calendar.add(Calendar.DAY_OF_MONTH, -30) // check usage for the last 30 days
+    // check usage for the last 30 days
+        calendar.add(Calendar.DAY_OF_MONTH, -30)
         val startTime = calendar.timeInMillis
         val endTime = System.currentTimeMillis()
 
         val stats = usageStatsManager.queryUsageStats(
-            UsageStatsManager.INTERVAL_BEST, // more flexible than INTERVAL_DAILY
+            // more flexible than INTERVAL_DAILY
+            UsageStatsManager.INTERVAL_BEST,
             startTime,
             endTime
         )
-
+       // gives the mapped output
         return stats.associateBy { it.packageName }
     }
 
 
+    // function to open the system App Info screen for the selected package where user can do what they want
     fun openAppInfo(context: Context, packageName: String) {
         val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
             data = Uri.parse("package:$packageName")

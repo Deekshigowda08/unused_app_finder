@@ -1,6 +1,5 @@
 package com.example.guhyatainterntask.ui.theme
 
-import android.graphics.drawable.Drawable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -22,26 +21,30 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
-import androidx.compose.ui.input.pointer.motionEventSpy
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
+import androidx.navigation.NavController
 
 @Composable
 fun AppDetailsScreen(
     appName: String,
     appVersion: String,
-    appIcon: Drawable,
-    onBackClick: () -> Unit,
-    onViewInPlayStore:  () -> Unit
-) {
+    appIcon: ImageBitmap,
+    navController: NavController,
+    onViewInPlayStore: () -> Unit
+){
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -53,14 +56,23 @@ fun AppDetailsScreen(
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp))
                 .background(Color.Black)
-                .clip(RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp))
                 .padding(vertical = 32.dp),
             contentAlignment = Alignment.Center
         ) {
             Row(modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBackClick) {
+                val isBackPressed = remember { mutableStateOf(false) }
+
+                IconButton(
+                    onClick = {
+                        if (!isBackPressed.value) {
+                            isBackPressed.value = true
+                            navController.popBackStack()
+                        }
+                    },
+                    enabled = !isBackPressed.value
+                ) {
                     Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
                 }
                 Spacer(modifier = Modifier.weight(1f))
@@ -79,11 +91,17 @@ fun AppDetailsScreen(
         Spacer(modifier = Modifier.height(40.dp))
 
         // Icon
-        val bitmap = appIcon.toBitmap()
-        Column(modifier = Modifier.fillMaxHeight(.8f).padding(16.dp) ) {
+        val bitmap = remember(appIcon) { appIcon }
+
+        Column(
+            modifier = Modifier
+                .fillMaxHeight(0.8f)
+                .padding(16.dp)
+        ) {
             Spacer(modifier = Modifier.weight(1f))
+
             Image(
-                painter = BitmapPainter(bitmap.asImageBitmap()),
+                painter = BitmapPainter(bitmap),
                 contentDescription = null,
                 modifier = Modifier
                     .size(200.dp)
@@ -92,46 +110,52 @@ fun AppDetailsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // App Name
+            // Adaptive font size based on name length
+            val fontSize = when {
+                appName.length > 25 -> 24.sp
+                appName.split(" ").size > 2 -> 30.sp
+                else -> 50.sp
+            }
+
             Text(
                 text = appName,
-                fontSize = 50.sp,
+                fontSize = fontSize,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.align(Alignment.CenterHorizontally),
-                color = Color.Black
+                color = Color.Black,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
             )
 
             Spacer(modifier = Modifier.height(4.dp))
 
-            // Version
             Text(
-                text = "Version : $appVersion",
+                text = "Version: $appVersion",
                 fontSize = 18.sp,
                 color = Color.Gray,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.align(Alignment.CenterHorizontally)
             )
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // View in Play Store button
             Button(
                 onClick = onViewInPlayStore,
                 modifier = Modifier
-                    .padding(24.dp)
+                    .padding(horizontal = 24.dp, vertical = 8.dp)
                     .fillMaxWidth()
-                    .height(50.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color.Black),
+                    .height(50.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Color.Black,
                     contentColor = Color.White
-                )
+                ),
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Text("View in play store", fontWeight = FontWeight.Bold)
+                Text("View in Play Store", fontWeight = FontWeight.Bold)
             }
-
-
         }
+
 
     }
 }
