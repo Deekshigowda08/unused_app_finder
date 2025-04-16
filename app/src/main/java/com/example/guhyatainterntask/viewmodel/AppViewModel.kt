@@ -1,10 +1,14 @@
 package com.example.guhyatainterntask.viewmodel
 
 import android.app.*
+import android.app.usage.StorageStatsManager
 import android.app.usage.UsageStats
 import android.app.usage.UsageStatsManager
 import android.content.*
 import android.net.Uri
+import android.os.Build
+import android.os.UserHandle
+import android.os.storage.StorageManager
 import android.provider.Settings
 import androidx.compose.runtime.*
 import androidx.compose.ui.graphics.asImageBitmap
@@ -17,12 +21,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     //To hold selected apps
     val selectedApp = mutableStateOf<AppInfo?>(null)
 
-//A helper function to update the selectedApp
+    //A helper function to update the selectedApp
     fun setSelectedApp(app: AppInfo) {
         selectedApp.value = app
     }
-
-
 
     private val _apps = mutableStateListOf<AppInfo>()
     val apps: List<AppInfo> get() = _apps
@@ -33,7 +35,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun loadInstalledApps() {
-
         val context = getApplication<Application>().applicationContext
         val pm = context.packageManager
 
@@ -63,6 +64,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             //gets last-usage
             val lastUsed = usageStatsMap[appInfo.packageName]?.lastTimeUsed ?: 0L
 
+            //gets app size
+            val appSize = getAppSize(context, appInfo.packageName)
+
             // adding to apps data to _apps list
             _apps.add(
                 AppInfo(
@@ -70,13 +74,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     packageName = appInfo.packageName,
                     icon = icon,
                     version = version,
-                    lastUsedTime = lastUsed
+                    lastUsedTime = lastUsed,
+                    sizeInBytes = appSize
                 )
             )
         }
     }
 
-// Function to fetches usage stats for all apps used in the last 30 days.
+    // Function to fetches usage stats for all apps used in the last 30 days.
     private fun getUsageStatsMap(context: Context): Map<String, UsageStats> {
         //to check if permission is granted
         val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
@@ -98,7 +103,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
         val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val calendar = Calendar.getInstance()
-    // check usage for the last 30 days
+        // check usage for the last 30 days
         calendar.add(Calendar.DAY_OF_MONTH, -30)
         val startTime = calendar.timeInMillis
         val endTime = System.currentTimeMillis()
@@ -109,10 +114,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             startTime,
             endTime
         )
-       // gives the mapped output
+        // gives the mapped output
         return stats.associateBy { it.packageName }
     }
-
 
     // function to open the system App Info screen for the selected package where user can do what they want
     fun openAppInfo(context: Context, packageName: String) {
@@ -123,5 +127,24 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         context.startActivity(intent)
     }
 
-
+    // Function to get app size (API 26+)
+    private fun getAppSize(context: Context, packageName: String): Long {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            try {
+                val storageStatsManager = context.getSystemService(Context.STORAGE_STATS_SERVICE) as StorageStatsManager
+                val appInfo = context.packageManager.getApplicationInfo(packageName, 0)
+                val storageStats = storageStatsManager.queryStatsForPackage(
+                    StorageManager.UUID_DEFAULT,
+                    packageName,
+                    UserHandle.getUserHandleForUid(appInfo.uid)
+                )
+                storageStats.appBytes + storageStats.dataBytes + storageStats.cacheBytes
+            } catch (e: Exception) {
+                0L
+            }
+        } else {
+            0L
+        }
+    }
 }
+

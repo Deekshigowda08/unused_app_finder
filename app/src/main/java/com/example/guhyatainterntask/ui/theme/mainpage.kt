@@ -307,7 +307,7 @@ fun InstalledAppsScreen(
             }
         }
 
-        // Uninstall Dialog
+        // Uninstall Suggestion Dialog
         if (showDialog && appToUninstall != null) {
             AlertDialog(
                 onDismissRequest = {
@@ -338,7 +338,7 @@ fun InstalledAppsScreen(
     }
 }
 
-
+//Used to print app icons
 @Composable
 fun AppIcon(bitmap: ImageBitmap) {
     Image(
