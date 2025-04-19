@@ -1,4 +1,6 @@
-#Unused_app_finder
+Unused_app_finder
+
+
 Introduction : This application organizes all the apps on your device and displays them in a categorized list. It identifies apps that have not been used in the last 7 days and organizes them separately. Additionally, it provides a search function to find specific apps. On the detailed screen of each app, the version information is displayed, along with a "Go to Play Store" button, allowing users to navigate directly to the Play Store for updates or further information.
 
 Images:
