@@ -50,12 +50,12 @@ class MainActivity : ComponentActivity() {
                     //details screen
                     composable("app_details") {
                         val selectedApp = viewModel.selectedApp.value
+
                         selectedApp?.let {
                             AppDetailsScreen(
                                 appName = it.name,
                                 appVersion = it.version ?: "Unknown",
                                 appIcon = it.icon,
-                                appSize = it.sizeInBytes,
                                 navController = navController,
                                 onViewInPlayStore = {
                                     val packageName = it.packageName
