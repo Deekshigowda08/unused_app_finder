@@ -27,6 +27,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -51,13 +52,13 @@ fun AppDetailsScreen(
     appName: String,
     appVersion: String,
     appIcon: ImageBitmap,
-    appSize: Long,
     navController: NavController,
     onViewInPlayStore: () -> Unit,
     onOpenApp: () -> Unit,
     onOpenAppInfo: () -> Unit
 ) {
-    val formattedSize = formatFileSize(appSize)
+
+
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -136,15 +137,7 @@ fun AppDetailsScreen(
                     overflow = TextOverflow.Ellipsis,
                     color = Color.Gray
                 )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "App size: $formattedSize",
-                    fontSize = 16.sp,
-                    color = Color.Black,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                Spacer(modifier = Modifier.height(34.dp))
+                Spacer(modifier = Modifier.height(28.dp))
 
                 Button(
                     onClick = onViewInPlayStore,

@@ -29,6 +29,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _apps = mutableStateListOf<AppInfo>()
     val apps: List<AppInfo> get() = _apps
 
+
+    fun reloadUsageDataOnly() {
+        val context = getApplication<Application>().applicationContext
+        val usageStatsMap = getUsageStatsMap(context)
+
+        _apps.forEachIndexed { index, app ->
+            val updated = app.copy(
+                lastUsedTime = usageStatsMap[app.packageName]?.lastTimeUsed ?: 0L
+            )
+            _apps[index] = updated
+        }
+    }
+
+
     //This block will be running as soon as this class is called
     init {
         loadInstalledApps()
@@ -64,8 +78,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             //gets last-usage
             val lastUsed = usageStatsMap[appInfo.packageName]?.lastTimeUsed ?: 0L
 
-            //gets app size
-            val appSize = getAppSize(context, appInfo.packageName)
+
 
             // adding to apps data to _apps list
             _apps.add(
@@ -74,8 +87,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     packageName = appInfo.packageName,
                     icon = icon,
                     version = version,
-                    lastUsedTime = lastUsed,
-                    sizeInBytes = appSize
+                    lastUsedTime = lastUsed
                 )
             )
         }
@@ -127,24 +139,5 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         context.startActivity(intent)
     }
 
-    // Function to get app size (API 26+)
-    private fun getAppSize(context: Context, packageName: String): Long {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            try {
-                val storageStatsManager = context.getSystemService(Context.STORAGE_STATS_SERVICE) as StorageStatsManager
-                val appInfo = context.packageManager.getApplicationInfo(packageName, 0)
-                val storageStats = storageStatsManager.queryStatsForPackage(
-                    StorageManager.UUID_DEFAULT,
-                    packageName,
-                    UserHandle.getUserHandleForUid(appInfo.uid)
-                )
-                storageStats.appBytes + storageStats.dataBytes + storageStats.cacheBytes
-            } catch (e: Exception) {
-                0L
-            }
-        } else {
-            0L
-        }
-    }
 }
 

@@ -8,6 +8,5 @@ data class AppInfo(
     val packageName: String,
     val icon: ImageBitmap,
     val version: String,
-    val lastUsedTime: Long,
-    val sizeInBytes:Long
+    val lastUsedTime: Long
 )
