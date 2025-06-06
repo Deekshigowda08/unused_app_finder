@@ -27,35 +27,57 @@ android {
             )
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+
     kotlinOptions {
         jvmTarget = "11"
     }
+
     buildFeatures {
         compose = true
+    }
+
+    composeOptions {
+        kotlinCompilerExtensionVersion = "1.5.13" // Ensure this matches your Compose version
     }
 }
 
 dependencies {
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose")
-    implementation("com.google.accompanist:accompanist-navigation-animation:0.34.0")
+    // Core Android and Jetpack
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose")
+
+    // Jetpack Compose BOM
     implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.ui)
-    implementation(libs.androidx.ui.graphics)
-    implementation(libs.androidx.ui.tooling.preview)
-    implementation(libs.androidx.material3)
+
+    // Compose UI
+    implementation("androidx.compose.material3:material3:1.3.2")
+    implementation("androidx.compose.material3:material3-window-size-class:1.3.2")
+    implementation("androidx.compose.material3:material3-adaptive-navigation-suite:1.4.0-alpha15")
+    implementation("androidx.compose.material:material:1.8.2")
+    implementation("androidx.compose.foundation:foundation:1.8.2")
+    implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.compose.material:material-icons-extended")
+    implementation("com.google.accompanist:accompanist-navigation-animation:0.34.0")
+
+    // Compose tooling & navigation
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.ui.tooling.preview)
+
+    // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
+
+    // Debug tools
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }

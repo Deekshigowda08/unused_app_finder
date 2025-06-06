@@ -8,5 +8,7 @@ data class AppInfo(
     val packageName: String,
     val icon: ImageBitmap,
     val version: String,
-    val lastUsedTime: Long
+    val lastUsedTime: Long,
+    val hasLocationPermission: Boolean = false,
+    val hasPhonePermission: Boolean = false
 )

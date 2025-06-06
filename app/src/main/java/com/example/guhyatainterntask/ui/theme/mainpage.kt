@@ -1,9 +1,9 @@
 package com.example.guhyatainterntask.ui.theme
+import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,27 +21,32 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.ExperimentalMaterialApi
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.pullrefresh.PullRefreshIndicator
+import androidx.compose.material.pullrefresh.pullRefresh
+import androidx.compose.material.pullrefresh.rememberPullRefreshState
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -62,15 +67,16 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.guhyatainterntask.helper.isAppUnused
 import com.example.guhyatainterntask.model.AppInfo
 import com.example.guhyatainterntask.viewmodel.AppViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-enum class AppTab { Unused, All }
+enum class AppTab { Unused, All ,permission}
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterialApi::class)
+@SuppressLint("UnrememberedMutableState")
 @JvmOverloads
 @Composable
 fun InstalledAppsScreen(
@@ -80,11 +86,24 @@ fun InstalledAppsScreen(
     val apps = viewModel.apps
     val listState = rememberSaveable(saver = LazyListState.Saver) { LazyListState() }
     val context = LocalContext.current
+    val scrollState = rememberScrollState()
     var selectedTab by rememberSaveable { mutableStateOf(AppTab.Unused) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var showDialog by remember { mutableStateOf(false) }
     var appToUninstall by remember { mutableStateOf<AppInfo?>(null) }
 
+    val coroutineScope = rememberCoroutineScope()
+    var isRefreshing by remember { mutableStateOf(false) }
+    val pullRefreshState = rememberPullRefreshState(
+        refreshing = isRefreshing,
+        onRefresh = {
+            coroutineScope.launch {
+                isRefreshing = true
+                viewModel.reloadPermissions()
+                isRefreshing = false
+            }
+        }
+    )
     val lifecycleOwner = LocalLifecycleOwner.current
 
     LaunchedEffect(Unit) {
@@ -111,6 +130,7 @@ fun InstalledAppsScreen(
                         val matchesTab = when (tab) {
                             AppTab.Unused -> isAppUnused(app.lastUsedTime)
                             AppTab.All -> true
+                            AppTab.permission -> app.hasPhonePermission || app.hasLocationPermission
                         }
                         val matchesSearch = app.name.contains(query, ignoreCase = true)
                         matchesTab && matchesSearch
@@ -150,10 +170,9 @@ fun InstalledAppsScreen(
                             .padding(20.dp)
                             .clip(RoundedCornerShape(12.dp))
                             .background(Color.White),
-                        colors = TextFieldDefaults.textFieldColors(
-                            containerColor = Color.Transparent,
-                            unfocusedIndicatorColor = Color.Transparent,
-                            focusedIndicatorColor = Color.Transparent
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color.White,
+                            unfocusedContainerColor = Color.LightGray
                         ),
                         leadingIcon = {
                             Icon(Icons.Default.Search, contentDescription = "Search Icon")
@@ -184,7 +203,8 @@ fun InstalledAppsScreen(
                 ) {
                     listOf(
                         AppTab.Unused to "Unused apps",
-                        AppTab.All to "All Apps"
+                        AppTab.All to "All Apps",
+                        AppTab.permission to "Permissions"
                     ).forEach { (tabEnum, tabLabel) ->
                         val selected = tabEnum == selectedTab
                         Box(
@@ -225,7 +245,50 @@ fun InstalledAppsScreen(
                         fontWeight = FontWeight.Medium
                     )
                 }
-            } else {
+            }
+            else if (selectedTab==AppTab.permission) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pullRefresh(pullRefreshState)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .padding(horizontal = 20.dp)
+                            .fillMaxWidth()
+                            .verticalScroll(scrollState)
+                    ) {
+                        Text("Phone Permission Allowed Apps", fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        Column {
+                            apps.filter { it.hasPhonePermission }.forEach { app ->
+                                AppRow(app, onAppClick)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Text("Location Permission Allowed Apps", fontWeight = FontWeight.Bold)
+                        Spacer(modifier = Modifier.height(20.dp))
+
+                        Column {
+                            apps.filter { it.hasLocationPermission }.forEach { app ->
+                                AppRow(app, onAppClick)
+                            }
+                        }
+                    }
+
+                    PullRefreshIndicator(
+                        refreshing = isRefreshing,
+                        state = pullRefreshState,
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    )
+                }
+
+
+            }
+            else {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.padding(horizontal = 20.dp)
@@ -240,8 +303,7 @@ fun InstalledAppsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(vertical = 9.dp)
-                                .clickable { onAppClick(app) }
-                                .animateItemPlacement(),
+                                .clickable { onAppClick(app) },
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             AppIcon(app.icon)
@@ -345,6 +407,21 @@ fun AppIcon(bitmap: ImageBitmap) {
         contentDescription = null,
         modifier = Modifier.size(48.dp)
     )
+}
+
+@Composable
+fun AppRow(app: AppInfo, onAppClick: (AppInfo) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp)
+            .clickable { onAppClick(app) },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        AppIcon(app.icon) // Assuming you have this composable
+        Spacer(modifier = Modifier.width(20.dp))
+        Text(text = app.name, fontWeight = FontWeight.Bold)
+    }
 }
 
 

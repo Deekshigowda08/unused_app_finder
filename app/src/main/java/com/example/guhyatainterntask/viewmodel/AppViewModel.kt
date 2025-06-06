@@ -1,21 +1,24 @@
 package com.example.guhyatainterntask.viewmodel
 
-import android.app.*
-import android.app.usage.StorageStatsManager
+import android.Manifest
+import android.app.AppOpsManager
+import android.app.Application
 import android.app.usage.UsageStats
 import android.app.usage.UsageStatsManager
-import android.content.*
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageInfo
+import android.content.pm.PackageManager
 import android.net.Uri
-import android.os.Build
-import android.os.UserHandle
-import android.os.storage.StorageManager
+import android.os.Process
 import android.provider.Settings
-import androidx.compose.runtime.*
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.drawable.toBitmap
-import androidx.lifecycle.*
+import androidx.lifecycle.AndroidViewModel
 import com.example.guhyatainterntask.model.AppInfo
-import java.util.*
+import java.util.Calendar
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     //To hold selected apps
@@ -35,10 +38,59 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val usageStatsMap = getUsageStatsMap(context)
 
         _apps.forEachIndexed { index, app ->
+            // Retrieve existing permission status to avoid overwriting it if not re-checking
+            val existingApp = _apps[index]
             val updated = app.copy(
-                lastUsedTime = usageStatsMap[app.packageName]?.lastTimeUsed ?: 0L
+                lastUsedTime = usageStatsMap[app.packageName]?.lastTimeUsed ?: 0L,
+                // Preserve existing permission info if you are only reloading usage
+                hasLocationPermission = existingApp.hasLocationPermission,
+                hasPhonePermission = existingApp.hasPhonePermission
             )
             _apps[index] = updated
+        }
+    }
+
+    fun reloadPermissions() { // Renamed for clarity
+        val context = getApplication<Application>().applicationContext
+
+        _apps.forEachIndexed { index, app ->
+            // It's generally safer to work with a copy if you're modifying items in a list
+            // you are iterating over, though direct modification by index is also possible
+            // with MutableList.
+
+            val updatedApp = app.copy(
+                hasLocationPermission = checkAppPermission(context, app.packageName, Manifest.permission.ACCESS_FINE_LOCATION) ||
+                        checkAppPermission(context, app.packageName, Manifest.permission.ACCESS_COARSE_LOCATION),
+                hasPhonePermission = checkAppPermission(context, app.packageName, Manifest.permission.READ_PHONE_STATE) // Or other phone permissions
+            )
+            _apps[index] = updatedApp
+        }
+        // If _apps is a LiveData or StateFlow, you might need to update its value here
+        // e.g., _appsLiveData.value = _apps.toList()
+    }
+
+    private fun checkAppPermission(context: Context, packageName: String, permission: String): Boolean {
+        return try {
+            val packageManager = context.packageManager
+            val packageInfo = packageManager.getPackageInfo(packageName, PackageManager.GET_PERMISSIONS)
+            val requestedPermissions = packageInfo.requestedPermissions
+            if (requestedPermissions != null) {
+                for (i in requestedPermissions.indices) {
+                    if (requestedPermissions[i] == permission) {
+                        // Check if the permission is granted for this app
+                        // Note: This checks if the app *can* be granted the permission.
+                        // To check if it *is currently* granted, you'd typically do this
+                        // from within the app itself using ContextCompat.checkSelfPermission.
+                        // Checking other apps' granted permissions is restricted for privacy.
+                        // However, you can check if a permission is declared in its manifest.
+                        return (packageManager.checkPermission(permission, packageName) == PackageManager.PERMISSION_GRANTED)
+                    }
+                }
+            }
+            false
+        } catch (e: PackageManager.NameNotFoundException) {
+            // App not found
+            false
         }
     }
 
@@ -64,30 +116,62 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         _apps.clear()
 
         //gets Apps name icon and version
-        resolvedApps.forEach { info ->
-            val appInfo = info.activityInfo
-            val appName = pm.getApplicationLabel(appInfo.applicationInfo).toString()
-            val drawable = pm.getApplicationIcon(appInfo.applicationInfo)
+        resolvedApps.forEach { resolvedInfo -> // Renamed 'info' to 'resolvedInfo' for clarity
+            val appActivityInfo = resolvedInfo.activityInfo // activityInfo from ResolveInfo
+            val packageName = appActivityInfo.packageName
+
+            val appName = pm.getApplicationLabel(appActivityInfo.applicationInfo).toString()
+            val drawable = pm.getApplicationIcon(appActivityInfo.applicationInfo)
             val icon = drawable.toBitmap().asImageBitmap()
             val version = try {
-                pm.getPackageInfo(appInfo.packageName, 0).versionName ?: "N/A"
+                pm.getPackageInfo(packageName, 0).versionName ?: "N/A"
             } catch (e: Exception) {
                 "Unknown"
             }
 
             //gets last-usage
-            val lastUsed = usageStatsMap[appInfo.packageName]?.lastTimeUsed ?: 0L
+            val lastUsed = usageStatsMap[packageName]?.lastTimeUsed ?: 0L
 
+            // Check for permissions
+            var hasLocation = false
+            var hasPhone = false
+            try {
+                // Get PackageInfo for the application, not just the activity
+                val packageInfo: PackageInfo =
+                    pm.getPackageInfo(packageName, PackageManager.GET_PERMISSIONS)
+                val requestedPermissions = packageInfo.requestedPermissions
+                if (requestedPermissions != null) {
+                    for (permission in requestedPermissions) {
+                        if (permission == Manifest.permission.ACCESS_FINE_LOCATION ||
+                            permission == Manifest.permission.ACCESS_COARSE_LOCATION
+                        ) {
+                            hasLocation = true
+                        }
+                        if (permission == Manifest.permission.READ_PHONE_STATE ||
+                            permission == Manifest.permission.CALL_PHONE // Add other phone permissions if needed
+                        ) {
+                            hasPhone = true
+                        }
+                        // If both found, no need to check further for this app
+                        if (hasLocation && hasPhone) break
+                    }
+                }
+            } catch (e: PackageManager.NameNotFoundException) {
+                // Handle the case where the package is no longer found (should be rare here)
+                e.printStackTrace()
+            }
 
 
             // adding to apps data to _apps list
             _apps.add(
                 AppInfo(
                     name = appName,
-                    packageName = appInfo.packageName,
+                    packageName = packageName,
                     icon = icon,
                     version = version,
-                    lastUsedTime = lastUsed
+                    lastUsedTime = lastUsed,
+                    hasLocationPermission = hasLocation, // Store permission info
+                    hasPhonePermission = hasPhone      // Store permission info
                 )
             )
         }
@@ -99,7 +183,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val appOps = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
         val mode = appOps.checkOpNoThrow(
             AppOpsManager.OPSTR_GET_USAGE_STATS,
-            android.os.Process.myUid(),
+            Process.myUid(),
             context.packageName
         )
 
@@ -113,7 +197,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             return emptyMap()
         }
 
-        val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val usageStatsManager =
+            context.getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
         val calendar = Calendar.getInstance()
         // check usage for the last 30 days
         calendar.add(Calendar.DAY_OF_MONTH, -30)
@@ -140,4 +225,3 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
 }
-
