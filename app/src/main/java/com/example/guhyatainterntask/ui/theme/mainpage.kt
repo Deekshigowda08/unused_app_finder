@@ -29,6 +29,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.filled.RemoveCircleOutline
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.pullrefresh.PullRefreshIndicator
 import androidx.compose.material.pullrefresh.pullRefresh
@@ -91,6 +92,8 @@ fun InstalledAppsScreen(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var showDialog by remember { mutableStateOf(false) }
     var appToUninstall by remember { mutableStateOf<AppInfo?>(null) }
+    var showRemoveDialog by remember { mutableStateOf(false) }
+    var appToProcessForRemovePermission by remember { mutableStateOf<AppInfo?>(null) }
 
     val coroutineScope = rememberCoroutineScope()
     var isRefreshing by remember { mutableStateOf(false) }
@@ -263,7 +266,14 @@ fun InstalledAppsScreen(
 
                         Column {
                             apps.filter { it.hasPhonePermission }.forEach { app ->
-                                AppRow(app, onAppClick)
+                                AppRow(
+                                    app = app,
+                                    onAppClick = onAppClick,
+                                    onShowConfirmationDialog = { appToShowDialogFor ->
+                                        appToProcessForRemovePermission = appToShowDialogFor
+                                        showRemoveDialog = true
+                                    }
+                                )
                             }
                         }
 
@@ -274,7 +284,11 @@ fun InstalledAppsScreen(
 
                         Column {
                             apps.filter { it.hasLocationPermission }.forEach { app ->
-                                AppRow(app, onAppClick)
+                                AppRow(app, onAppClick,
+                                    onShowConfirmationDialog = { appToShowDialogFor ->
+                                    appToProcessForRemovePermission = appToShowDialogFor
+                                    showRemoveDialog = true
+                                })
                             }
                         }
                     }
@@ -365,6 +379,34 @@ fun InstalledAppsScreen(
                 }
             }
 
+
+            if (showRemoveDialog && appToProcessForRemovePermission != null) {
+                AlertDialog(
+                    onDismissRequest = {
+                        showRemoveDialog = false
+                        appToProcessForRemovePermission = null
+                    },
+                    title = { Text("Confirm Removal") }, // Or "Confirm Permission Removal"
+                    text = { Text("Do you really want to remove permissions for ${appToProcessForRemovePermission?.name}?") }, // Adjust text as needed
+                    confirmButton = {
+                        TextButton(onClick = {
+                            showRemoveDialog = false
+                            appToProcessForRemovePermission = null
+                        }) {
+                            Text("Confirm")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = {
+                            showRemoveDialog = false
+                            appToProcessForRemovePermission = null
+                        }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
+
             // Uninstall Suggestion Dialog
             if (showDialog && appToUninstall != null) {
                 AlertDialog(
@@ -410,7 +452,7 @@ fun AppIcon(bitmap: ImageBitmap) {
 }
 
 @Composable
-fun AppRow(app: AppInfo, onAppClick: (AppInfo) -> Unit) {
+fun AppRow(app: AppInfo, onAppClick: (AppInfo) -> Unit,onShowConfirmationDialog:(AppInfo) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -421,6 +463,17 @@ fun AppRow(app: AppInfo, onAppClick: (AppInfo) -> Unit) {
         AppIcon(app.icon) // Assuming you have this composable
         Spacer(modifier = Modifier.width(20.dp))
         Text(text = app.name, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.weight(1f))
+        IconButton(onClick = {
+            onShowConfirmationDialog(app)
+        }
+        ) {
+            Icon(
+                Icons.Default.RemoveCircleOutline,
+                contentDescription = "Uninstall ${app.name}"
+            )
+        }
+
     }
 }
 
