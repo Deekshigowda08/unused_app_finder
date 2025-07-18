@@ -8,6 +8,8 @@ android {
     namespace = "com.example.guhyatainterntask"
     compileSdk = 35
 
+
+
     defaultConfig {
         applicationId = "com.example.guhyatainterntask"
         minSdk = 29
@@ -76,6 +78,14 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
+
+
+    //shizuku api call
+    var shizuku_version ="12.1.0"
+    implementation("dev.rikka.shizuku:api:$shizuku_version")
+
+// Add this line if you want to support Shizuku
+    implementation("dev.rikka.shizuku:provider:$shizuku_version")
 
     // Debug tools
     debugImplementation(libs.androidx.ui.tooling)
